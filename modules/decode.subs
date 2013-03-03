@@ -1,0 +1,286 @@
+#!perl
+use strict;
+use warnings 'FATAL' => 'all';
+
+use lib 'modules';
+use Mac::AppleSingleDouble ();
+use Mac::LittleSingleDouble ();
+use Mac::Macbinary ();
+use Convert::BinHex ();
+use Encode ();
+use Time::Local ();
+
+sub ReadMacFile
+{
+  my ($filename) = @_;
+  
+  my $info = undef;
+  unless ($info->{'parsed'}) { $info = ReadFromBin($filename); }
+  unless ($info->{'parsed'}) { $info = ReadFromApple($filename); }
+  unless ($info->{'parsed'}) { $info = ReadFromBrokenApple($filename); }
+  unless ($info->{'parsed'}) { $info = ReadFromHqx($filename); }
+  return $info;
+}
+
+sub ReadFromApple
+{
+  my ($filename) = @_;
+  my %info;
+  eval {
+    my $applefile = new Mac::AppleSingleDouble($filename);
+    if ($applefile->is_applesingle())
+    {
+      $info{'parsed'} = "AppleSingle";
+      $info{'resource_fork'} = $applefile->get_entry(2);
+      
+      my $fname = $applefile->get_entry(3);
+      if (defined $fname && length $fname)
+      {
+        $info{'filename'} = Encode::decode("MacRoman", $fname);
+      }
+      
+      my $finf = $applefile->get_finder_info();
+      $info{'type'} = $finf->{'Type'};
+      $info{'creator'} = $finf->{'Creator'};
+      $info{'flags'} = $finf->{'Flags'};
+      
+      my $date_info = $applefile->get_entry(8);
+      if (defined $date_info)
+      {
+        my $offset = Time::Local::timegm(0, 0, 0, 1, 0, 2000);
+        my ($create, $mod) = unpack "NN", $date_info;
+        if ($create != 0x8000000)
+        {
+          $info{'created'} = Uint32_to_Sint32($create) + $offset;
+        }
+        if ($mod != 0x8000000)
+        {
+          $info{'modified'} = Uint32_to_Sint32($mod) + $offset;
+        }
+      }
+    }
+    $applefile->close();
+  };
+  if ($@) { }
+  return \%info;
+}
+
+sub Uint32_to_Sint32
+{
+  my ($v) = @_;
+  if ($v >= (2 << 30))
+  {
+    $v -= (2 << 31);
+  }
+  return $v;
+}
+
+sub Sint32_to_Uint32
+{
+  my ($v) = @_;
+  if ($v < 0)
+  {
+    $v += (2 << 31);
+  }
+  return $v;
+}
+
+sub ReadFromBrokenApple
+{
+  my ($filename) = @_;
+  my %info;
+  eval {
+    my $applefile = new Mac::LittleSingleDouble($filename);
+    if ($applefile->is_applesingle())
+    {
+      $info{'parsed'} = "Broken AppleSingle";
+      $info{'resource_fork'} = $applefile->get_entry(2);
+      
+      my $fname = $applefile->get_entry(3);
+      if (defined $fname && length $fname)
+      {
+        $info{'filename'} = Encode::decode("MacRoman", $fname);
+      }
+      
+      my $finf = $applefile->get_finder_info();
+      $info{'type'} = $finf->{'Type'};
+      $info{'creator'} = $finf->{'Creator'};
+      $info{'flags'} = $finf->{'Flags'};
+      
+      my $date_info = $applefile->get_entry(8);
+      if (defined $date_info)
+      {
+        my $offset = Time::Local::timegm(0, 0, 0, 1, 0, 2000);
+        my ($create, $mod) = unpack "NN", $date_info;
+        if ($create != 0x8000000)
+        {
+          $info{'created'} = Uint32_to_Sint32($create) + $offset;
+        }
+        if ($mod != 0x8000000)
+        {
+          $info{'modified'} = Uint32_to_Sint32($mod) + $offset;
+        }
+      }
+    }
+    $applefile->close();
+  };
+  if ($@) { }
+  return \%info;
+}
+
+sub ReadFromBin
+{
+  my ($filename) = @_;
+  my %info;
+  eval {
+    my $mb = Mac::Macbinary->new($filename, { 'validate' => 1 });
+    $info{'parsed'} = "MacBinary";
+    $info{'resource_fork'} = $mb->resource;
+    
+    my $header = $mb->header;
+    $info{'type'} = $header->type;
+    $info{'creator'} = $header->creator;
+    $info{'flags'} = $header->flags << 8;
+    
+    my $fname = $header->name;
+    if (defined $fname && length $fname)
+    {
+      $info{'filename'} = Encode::decode("MacRoman", $fname);
+    }
+    
+    my $offset = Time::Local::timegm(0, 0, 0, 1, 0, 1904);
+    my $cdate = $header->cdate;
+    if ($cdate > 0)
+    {
+      $info{'created'} = $cdate + $offset;
+    }
+    my $mdate = $header->mdate;
+    if ($mdate > 0)
+    {
+      $info{'modified'} = $mdate + $offset;
+    }
+  };
+  if ($@) { }
+  return \%info;
+}
+
+sub ReadFromHqx
+{
+  my ($filename) = @_;
+  my %info;
+  eval {
+    my $hqx = Convert::BinHex->open('Expr' => "<$filename") or die;
+    $hqx->read_header();
+    $info{'parsed'} = "BinHex";
+    $info{'type'} = $hqx->type();
+    $info{'creator'} = $hqx->creator();
+    $info{'flags'} = $hqx->flags();
+    
+    my $fname = $hqx->filename();
+    if (defined $fname && length $fname)
+    {
+      $info{'filename'} = Encode::decode("MacRoman", $fname);
+    }
+    
+    my @data = $hqx->read_data();
+    @data = ();  # we don't care about data
+    my @rsrc = $hqx->read_resource();
+    if (scalar @rsrc)
+    {
+      $info{'resource_fork'} = join('', @rsrc);
+    }
+  };
+  if ($@) { }
+  return \%info;
+}
+
+sub RForkFromRawFile
+{
+  my ($filename) = @_;
+  
+  my $fh;
+  open($fh, '<', $filename) or return undef;
+  my $fLen = 0;
+  
+  # do some validation, to see that it's a valid resource fork
+  eval {
+    my $header;
+    die unless (30 == read($fh, $header, 30));
+    my ($dataOff, $mapOff, $dataLen, $mapLen) = unpack('N*', $header);
+    die if $dataOff < 0x10;
+    die if $mapOff < 0x10;
+    die if $mapLen < 30;
+    die if ($dataOff < $mapOff && ($dataOff + $dataLen) > $mapOff);
+    die if ($mapOff < $dataOff && ($mapOff + $mapLen) > $dataOff);
+    
+    seek($fh, 0, 2) or die;
+    $fLen = tell $fh;
+    die if ($dataOff + $dataLen) > $fLen;
+    die if ($mapOff + $mapLen) > $fLen;
+  };
+  if ($@ || !$fLen)
+  {
+    close $fh;
+    return undef;
+  }
+  
+  my $rfork;
+  unless (seek($fh, 0, 0) && ($fLen == read($fh, $rfork, $fLen)))
+  {
+    $rfork = undef;
+  }
+  close $fh;
+  return $rfork;
+}
+
+sub WriteMacBinary
+{
+  my ($info, $fh) = @_;
+  
+  my $fname = $info->{'filename'};
+  $fname = '' unless defined $fname;
+  if (length $fname)
+  {
+    $fname = Encode::encode("MacRoman", $fname);
+  }
+  my $type = $info->{'type'};
+  $type = '????' unless defined $type;
+  my $creator = $info->{'creator'};
+  $creator = '????' unless defined $type;
+  my $flags = $info->{'flags'} || 0;
+  
+  my $offset = Time::Local::timegm(0, 0, 0, 1, 0, 1904);
+  my $create = defined $info->{'created'} ? $info->{'created'} - $offset : 0;
+  my $mod = defined $info->{'modified'} ? $info->{'modified'} - $offset : 0;
+  
+  my $rfork = $info->{'resource_fork'};
+  my $rsize = defined $rfork ? length $rfork : 0;
+  
+  my $buf = pack("xCa63a4a4CxNnCxNNNNnCa4CCx8NnCC",
+    length($fname), $fname,
+    $type, $creator,
+    ($flags & 0xff00) >> 8,
+    0, 0, 0,
+    0, $rsize,
+    Sint32_to_Uint32($create), Sint32_to_Uint32($mod),
+    0, ($flags & 0x00ff),
+    'mBIN',
+    0, 0,
+    0, 0,
+    130, 129);
+  print $fh $buf;
+  my $crc = Convert::BinHex::macbinary_crc($buf, 0);
+  $crc &= 0xffff;
+  $crc <<= 16;
+  print $fh pack("N", $crc);
+  
+  print $fh $rfork;
+  if ($rsize % 128)
+  {
+    my $padding = 128 - ($rsize % 128);
+    print $fh (chr(0) x $padding);
+  }
+}
+
+
+1;

@@ -1,0 +1,541 @@
+#!/usr/bin/perl
+use strict;
+use warnings 'FATAL' => 'all';
+use Text::Unidecode ();
+
+our ($FILEROOT, $FOLDER);
+require "$FILEROOT/modules/font.subs";
+
+
+sub MakeDocumentEntry
+{
+  my ($info, $rsrc, $uploadname) = @_;
+  
+  my $fname = $info->{'filename'};
+  unless (defined $fname)
+  {
+    $fname = $uploadname;
+    $fname =~ s|^.*/||;
+    $fname =~ s/\.(bin|hqx|as|applesingle|macbin|macbinary)$//i;
+  }
+  $fname =~ s/[\s\r\n]+/ /;
+  $fname =~ s/^ //;
+  $fname =~ s/ $//;
+  $fname = 'Untitled' unless length $fname;
+  
+  my $db = DBObjectRW();
+  my $permalink = MakePermaLink($fname, sub {
+      return 1 if $_[0] eq 'index';
+      return $db->select(<<END, $_[0]);
+SELECT COUNT(*) FROM document WHERE display_id = ?
+END
+      });
+  
+  my $id = $db->do(<<END, $permalink, $fname);
+INSERT INTO document
+       (display_id, display_name)
+VALUES (?, ?)
+END
+  for my $datetype (qw(created modified))
+  {
+    next unless defined $info->{$datetype};
+    $db->do(<<END, $info->{$datetype}, '1970-01-01', $id);
+UPDATE document
+   SET $datetype = FROM_UNIXTIME(? + UNIX_TIMESTAMP(?))
+ WHERE id = ?
+END
+  }
+  
+  my $pagect = 0;
+  my $pageid = 128;
+  $pagect++ while (exists $rsrc->{'TEXT'}{$pageid++});
+  $db->do(<<END, $pagect, $id);
+UPDATE document
+   SET pages = ?
+ WHERE id = ?
+END
+  return ($id, $permalink, $fname);
+}
+  
+sub MakePermaLink
+{
+  my ($text, $uniq_sub) = @_;
+  my $maxlen = 64;
+  $text = '' unless defined $text;
+  
+  $text = Text::Unidecode::unidecode($text);
+  $text =~ s/\W+/-/g;
+  $text =~ s/^-//;
+  $text =~ s/-$//;
+  
+  $text = 'untitled' unless length $text;
+  $text = lc($text);
+  
+  my $link = substr($text, 0, $maxlen);
+  if ($uniq_sub)
+  {
+    my $ct = 1;
+    while ($uniq_sub->($link))
+    {
+      my $suffix = "-$ct";
+      $ct++;
+      
+      $link = substr($text, 0, $maxlen - length($suffix)) . $suffix;
+    }
+  }
+  return $link;
+} # end MakePermaLink
+
+
+sub UnlockDocument
+{
+  my ($internal_id) = @_;
+  
+  DBObjectRW()->do(<<END, 1, $internal_id);
+UPDATE document
+   SET inited = ?
+ WHERE id = ?
+END
+}
+
+sub PageTitles
+{
+  my ($rsrc) = @_;
+  
+  my @titles;
+  my $id = 2001;
+  while (exists $rsrc->{'STR '}{$id}{'data'})
+  {
+    push(@titles, GetString($rsrc, $id, 'trim' => 1, 'default' => '(Untitled)'));
+    $id++;
+  }
+  return \@titles;
+}
+
+sub FmtColor
+{
+  my ($clr) = @_;
+  
+  return sprintf 'rgb(%d, %d, %d)', $clr->[0], $clr->[1], $clr->[2];
+}
+
+sub HasNewPinf
+{
+  my ($rsrc) = @_;
+  
+  return 0 unless defined $rsrc->{'pInf'};
+  my (@ids) = sort { $a <=> $b } keys %{ $rsrc->{'pInf'} };
+  return 0 unless scalar @ids;
+  return 1 if $ids[0] < 2001;
+  my $pages = PageTitles($rsrc);
+  my $maxnew = 200 + (scalar(@$pages) * 1000);
+  return 0 if $ids[0] > $maxnew;
+  
+  # At this point, we still don't know yet.
+  # We could scan the data to find which pages
+  # need them, or to see which ones are formatted
+  # new-style, but I just don't care that much.
+  return undef;
+}
+
+sub ReadPinf
+{
+  my ($rsrc, $page, $idx, $newstyle) = @_;
+  
+  my %info;
+  my $data;
+  unless ($newstyle)
+  {
+    $data = $rsrc->{'pInf'}{$idx + (1000 * ($page + 1))}{'data'};
+  }    
+  if ($newstyle || (!defined($data) && !defined($newstyle)))
+  {
+    $data = $rsrc->{'pInf'}{$idx + (100 * ($page + 1))}{'data'};
+  }
+  return \%info unless defined $data;
+  
+  SetReadSource($data);
+  $info{'pict'} = ReadSint16();
+  $info{'alignment'} = ReadSint16();
+  ReadPadding(2);
+  my $action = ReadSint16();
+  if ($action == 1)
+  {
+    $info{'pagelink'} = ReadSint16();
+    # we ignore paragraph jump, only available in later versions
+  }
+  elsif ($action == 3)
+  {
+    $info{'printbutton'} = 1;
+  }
+  elsif ($action == 5)
+  {
+    my $namelen = ReadUint8();
+    $info{'filelink'} = Encode::decode("MacRoman", ReadRaw($namelen));
+  }
+  elsif ($action == 8)
+  {
+    my $namelen = ReadUint8();
+    $info{'label'} = Encode::decode("MacRoman", ReadRaw($namelen));
+  }
+
+    # unimplemented actions include:
+    # - previous chapter
+    # - next chapter
+    # - back to last chapter
+    # - close
+    # - print
+    # - save as text
+    # - play sound
+    # - play movie
+    # - apple eevnt
+    # - script
+    # - show About box
+    # - find
+    # - show table of contents
+    
+  return \%info;
+}
+
+sub Margins
+{
+  my ($rsrc, $page) = @_;
+  
+  my %info = (
+      'top' => 0,
+      'left' => 36,
+      'bottom' => 7,
+      'right' => 36,
+      'alignment' => 'left',
+    );
+  my $data = $rsrc->{'Wndo'}{127 + $page}{'data'};
+  return \%info unless $data;
+  
+  SetReadSource($data);
+  $info{'top'} = ReadUint16();
+  $info{'left'} = ReadUint16();
+  $info{'bottom'} = ReadUint16();
+  $info{'right'} = ReadUint16();
+  ReadPadding(8); # print margins
+  ReadPadding(2); # unknown
+  my $align = ReadSint16();
+  $info{'alignment'} = 'right' if $align < 0;
+  $info{'alignment'} = 'center' if $align > 0;
+  
+  return \%info;
+}
+
+sub Picture
+{
+  my ($rsrc, $page, $idx, $newstyle) = @_;
+  
+  my $info = ReadPinf($rsrc, $page, $idx, $newstyle);
+  return '' unless $info->{'pict'};
+  
+  my $src = 'pict' . $info->{'pict'} . '.png';
+  my ($width, $height) = ImageSize("$FOLDER/$src");
+  $width = 0 unless defined $width;
+  $height = 0 unless defined $height;
+  my $alt = '';
+  my $title = '';
+  my $href = '';
+  if ($info->{'filelink'})
+  {
+    $alt = "File link to &quot;" . Fmt($info->{'filelink'}) . "&quot;";
+    $title = $alt;
+  }
+  elsif ($info->{'pagelink'})
+  {
+    $alt = "Page " . $info->{'pagelink'};
+    $title = $alt;
+    $href = PageLink($info->{'pagelink'});
+  }
+  elsif ($info->{'label'})
+  {
+    $title = Fmt($info->{'label'});
+  }
+  
+  my $html = q(<div class="pic" style=");
+  $html .= qq(width: ${width}pt; height: ${height}pt; );
+  if ($info->{'alignment'} == 2)
+  {
+    $html .= 'left: 0; ';
+  }
+  elsif ($info->{'alignment'} == 3)
+  {
+    $html .= 'right: 0; ';
+  }
+  else
+  {
+    $html .= 'left: 50%; margin-left: -' . int($width / 2) . 'pt; ';
+  }
+  $html .= q(">);
+  $html .= qq(<a href="$href">) if $href;
+  $html .= qq(<img src="$src" alt="$alt");
+  $html .= qq( style="width: ${width}pt; height: ${height}pt");
+  $html .= qq( title="$title") if length $title;
+  $html .= q(>);
+  $html .= q(</a>) if $href;
+  $html .= q(</div>);
+  return $html;
+}
+
+sub BackgroundColor
+{
+  my ($rsrc, $page) = @_;
+  
+  my $clrs = GetClut($rsrc, 128);
+  if (scalar @$clrs >= $page)
+  {
+    return $clrs->[$page - 1];
+  }
+  elsif (scalar @$clrs)
+  {
+    return $clrs->[scalar(@$clrs) - 1];
+  }
+  return [ 255, 255, 255, 0 ];
+}
+
+
+sub JSEscape
+{
+  my ($text) = @_;
+  
+  $text =~ s/\\/\\u005c/g;
+  $text =~ s/</\\u003c/g;
+  $text =~ s/>/\\u003e/g;
+  $text =~ s/"/\\u0022/g;
+  $text =~ s/'/\\u0027/g;
+  $text =~ s/\&/\\u0026/g;
+  return $text;
+}
+
+sub PageJS
+{
+  my ($rsrc, $display_name, $permalink) = @_;
+  
+  my $title = JSEscape(Fmt($display_name));
+  my $desc = JSEscape(About($rsrc));
+
+  my $js = <<END;
+var title = '$title';
+var desc_html = '$desc';
+var dm_archive = '$permalink.bin';
+var ht_archive = '$permalink-html.zip';
+
+var pages = [
+END
+  my $ptitles = PageTitles($rsrc);
+  for my $i (1..scalar(@$ptitles))
+  {
+    my $jtitle = JSEscape(Fmt($ptitles->[$i - 1]));
+    my $url = PageLink($i);
+    $js .= <<END;
+  {'url' : '$url', 'title' : '$jtitle'},
+END
+  }
+  $js .= <<END;
+  ];
+END
+  return $js;
+}
+
+sub PageCSS
+{
+  my ($rsrc) = @_;
+  
+  my $css = <<END;
+BODY {
+  margin: 0;
+  padding: 0;
+}
+.rawfmt {
+  white-space: pre-wrap;
+}
+DIV.pic {
+  position: absolute;
+}
+DIV.pic IMG {
+  vertical-align: top;
+}
+A IMG {
+  border: none;
+}
+END
+  my $page = 1;
+  while (exists $rsrc->{'styl'}{127 + $page})
+  {
+    my $bgcolor = BackgroundColor($rsrc, $page);
+    my $bg = FmtColor($bgcolor);
+    my $margins = Margins($rsrc, $page);
+    $css .= <<END;
+HTML.page$page, BODY.page$page {
+  background-color: $bg;
+}
+DIV.page${page}_margins {
+  margin: @{[ $margins->{'top'} ]}pt @{[ $margins->{'right'} ]}pt @{[ $margins->{'bottom'} ]}pt @{[ $margins->{'left'} ]}pt;
+}
+DIV.page${page}_content {
+  position: relative;
+  line-height: 1px;
+  text-align: @{[ $margins->{'alignment'} ]};
+}
+END
+
+    my $styles = GetStyl($rsrc, 127 + $page);
+    my $sidx = 1;
+    for my $s (@$styles)
+    {
+      $css .= StylToCSS($s, ".page${page}_style${sidx}", $bgcolor);
+      $sidx++;
+    }
+    $page++;
+  }
+  return $css;
+}
+
+sub About
+{
+  my ($rsrc) = @_;
+  
+  my $opening_html = '';
+  for my $ptext (GetString($rsrc, 3000), GetString($rsrc, 3001))
+  {
+    next unless defined($ptext) && length($ptext);
+    $opening_html .= '<p class="rawfmt">' . Format($ptext) . '</p>';
+  }
+  return $opening_html;
+}
+
+sub PageLink
+{
+  my ($index) = @_;
+  
+  return 'index.html' if ($index == 1);
+  return "page$index.html";
+}
+  
+
+sub StylToCSS
+{
+  my ($styl, $cssname, $bgcolor) = @_;
+  
+  return '' unless defined $styl;
+  my $css = <<END;
+$cssname {
+  font-family:  "@{[ Fmt(FontName($styl->{'font-id'})) ]}";
+  font-size:    @{[ $styl->{'size'} ]}pt;
+  color:        @{[ FmtColor($styl->{'color'}) ]};
+  /* ascent:    @{[ $styl->{'ascent'} ]}pt; */
+END
+  $css .= ($styl->{'height'} > 0) ? <<END1 : <<END2;
+  line-height:  @{[ $styl->{'height'} ]}pt;
+END1
+  /* line-height: @{[ $styl->{'height'} ]}pt; */
+END2
+  $css .= <<END if $styl->{'bold'};
+  font-weight:  bold;
+END
+  $css .= <<END if $styl->{'italic'};
+  font-style:   italic;
+END
+  $css .= <<END if $styl->{'underline'};
+  text-decoration: underline;
+END
+  $css .= <<END if $styl->{'outline'} && !$styl->{'shadow'};
+  color:        @{[ FmtColor($bgcolor) ]};
+  text-shadow:  -1px 0 @{[ FmtColor($styl->{'color'}) ]},
+                 1px 0 @{[ FmtColor($styl->{'color'}) ]},
+                0 -1px @{[ FmtColor($styl->{'color'}) ]},
+                0  1px @{[ FmtColor($styl->{'color'}) ]};
+END
+  $css .= <<END if $styl->{'shadow'} && !$styl->{'outline'};
+  text-shadow:  2pt 2pt @{[ FmtColor($styl->{'color'}) ]};
+END
+  $css .= <<END if $styl->{'outline'} && $styl->{'shadow'};
+  color:        @{[ FmtColor($bgcolor) ]};
+  text-shadow:  -1px 0 @{[ FmtColor($styl->{'color'}) ]},
+                 1px 0 @{[ FmtColor($styl->{'color'}) ]},
+                0 -1px @{[ FmtColor($styl->{'color'}) ]},
+                0  1px @{[ FmtColor($styl->{'color'}) ]},
+                2pt 2pt @{[ FmtColor($styl->{'color'}) ]};
+END
+  $css .= <<END if $styl->{'condensed'} && !$styl->{'expanded'};
+  font-stretch: condensed;
+END
+  $css .= <<END if $styl->{'expanded'} && !$styl->{'condensed'};
+  font-stretch: expanded;
+END
+  
+  $css .= <<END;
+}
+
+END
+  return $css;
+}
+
+sub StyledPage
+{
+  my ($rsrc, $page) = @_;
+  
+  my $rawtext = $rsrc->{'TEXT'}{127 + $page}{'data'};
+  return '' unless defined $rawtext && length $rawtext;
+  my $styles = GetStyl($rsrc, 127 + $page);
+  my $newpinf = HasNewPinf($rsrc);
+  my @ranges;
+  for my $s (@$styles)
+  {
+    my $start = $s->{'start'};
+    push(@ranges, $start - 1, $start);
+  }
+  shift @ranges;
+  push(@ranges, length($rawtext) - 1);
+  
+  my $html = '';
+  my $pic = 1;
+  my $sidx = 1;
+  while (scalar @ranges)
+  {
+    my $classname = "page${page}_style${sidx}";
+    $sidx++;
+    my $start = shift @ranges;
+    my $end = shift @ranges;
+    my $chunk = substr($rawtext, $start, $end - $start + 1);
+    next unless length $chunk;
+    
+    if ($chunk eq "\xCA")
+    {
+      # if chunk solely consists of image, don't bother
+      # wrapping it in the style
+      $html .= Picture($rsrc, $page, $pic++, $newpinf);
+      next;
+    }
+    
+    # move image refs to start of lines
+    # this isn't exactly right, but in most cases
+    # we can't work out authentic start
+    # (highest point of current line)
+    while ($chunk =~ /[^\x0D\xCA]\xCA/)
+    {
+      $chunk =~ s/([^\x0D\xCA]+)(\xCA)/$2$1/;
+    }
+        
+    for my $part (split(/(\xCA)/, $chunk))
+    {
+      if ($part eq "\xCA")
+      {
+        $html .= Picture($rsrc, $page, $pic++, $newpinf);
+      }
+      else
+      {
+        my $conv = Encode::decode("MacRoman", $part);
+        $conv =~ s/\t/ /g;
+        $html .= qq(<span class="$classname rawfmt">) . Format($conv) . q(</span>);
+      }
+    }
+  }
+  return $html;
+}
+
+
+1;

@@ -1,0 +1,173 @@
+#!/usr/bin/perl
+use strict;
+use warnings 'FATAL' => 'all';
+require 'modules/docmaker.ph';
+require 'modules/decode.subs';
+require 'modules/rfork.subs';
+require 'modules/image.subs';
+
+our ($HOME_URL, $UPLOAD_URL, $FILE_URL, $HELP_URL, $CONTENTROOT);
+
+our $FOLDER;
+
+my $cg = CGObject();
+
+my $uploadfh = $cg->upload('filebox');
+UploadPage() unless $uploadfh;
+
+# parse and unpack
+my $uploadpath = $cg->tmpFileName($cg->param('filebox'));
+my $info = ReadMacFile($uploadpath);
+
+# sanity checks on unpacked data
+UploadError("Sorry, your document could not be read. This site only understands  files in MacBinary, BinHex, or AppleSingle format.") unless $info->{'parsed'};
+
+my $type = $info->{'type'};
+$type = 'APPL' unless defined $type;
+my $creator = $info->{'creator'};
+$type = 'Dk@P' unless defined $creator;
+UploadError("Sorry, this doesn't look like a DOCMaker document. DOCMaker documents should have a type of 'APPL' and a creator of 'Dk\@P', but yours had '$type'/'$creator'. Make sure the document isn't compressed; we can't handle things like .sit.hqx files.") unless ($type eq 'APPL' && $creator eq 'Dk@P');
+
+# unpack resource fork
+my $rsrc = RForkToHash($info->{'resource_fork'});
+UploadError("Sorry, there was a problem reading the resource data. Maybe your document is corrupted.") unless $rsrc;
+
+# resource fork sanity checks
+UploadError("Sorry, no pages could be found. Are you sure this is a DOCMaker document?") unless (exists $rsrc->{'TEXT'} && exists $rsrc->{'TEXT'}{'128'} && exists $rsrc->{'styl'} && exists $rsrc->{'styl'}{'128'});
+
+# add to database
+my ($internal_id, $permalink, $display_name) = MakeDocumentEntry($info, $rsrc, $cg->param('filebox'));
+UploadError("Sorry, the document could not be saved.") unless $permalink;
+
+# save binary
+my $folder = "$CONTENTROOT/$permalink";
+mkdir $folder;
+$FOLDER = $folder;
+my $out_fh;
+open($out_fh, '>', "$folder/$permalink.bin");
+WriteMacBinary($info, $out_fh);
+close $out_fh;
+
+# save icon - try custom, fall back to standard
+my $iconpath = "$folder/icon.png";
+IconToImage(
+  $rsrc->{'ICN#'}{'-16455'}{'data'},
+  $rsrc->{'icl8'}{'-16455'}{'data'}, $iconpath)
+  || IconToImage(
+      $rsrc->{'ICN#'}{'128'}{'data'},
+      $rsrc->{'icl8'}{'128'}{'data'}, $iconpath);
+
+my $picthtml = '';
+# save included images
+if (exists $rsrc->{'PICT'})
+{
+  for my $id (sort keys %{ $rsrc->{'PICT'} })
+  {
+    next unless $id > 2000;
+    PictToImage($rsrc->{'PICT'}{$id}{'data'}, "$folder/pict$id.png");
+    $picthtml .= qq(<p>PICT $id: <img src="$FILE_URL/$permalink/pict$id.png"></p>\n);
+  }
+}
+
+# generate CSS/JS
+open $out_fh, '>', "$folder/page.css";
+print $out_fh PageCSS($rsrc);
+close $out_fh;
+open $out_fh, '>', "$folder/page.js";
+print $out_fh PageJS($rsrc, $display_name, $permalink);
+close $out_fh;
+
+my $ptitles = PageTitles($rsrc);
+for my $i (1..scalar(@$ptitles))
+{
+  my $page_html = GenPageStart($display_name . ': ' . $ptitles->[$i - 1], "page$i");
+  $page_html .= <<END;
+<div class="page_main page${i}_margins"><div class="page${i}_content">
+@{[ StyledPage($rsrc, $i) ]}
+</div></div>
+END
+  $page_html .= GenPageEnd();
+  open $out_fh, '>', "$folder/" . PageLink($i);
+  print $out_fh $page_html;
+  close $out_fh;
+}
+
+chdir $CONTENTROOT;
+`zip -r $permalink/$permalink-html.zip $permalink -x $permalink/$permalink.bin`;
+
+UnlockDocument($internal_id);
+Redirect("$FILE_URL/$permalink/");
+
+
+
+sub UploadError
+{
+  my ($msg) = @_;
+  
+  my $html = <<END;
+<div class="textwall">
+<h2>Sorry, a system error occurred.</h2>
+
+<p>
+$msg
+See our <a href="$HELP_URL">help page</a> for advice on common problems.
+</p>
+
+<p>
+<a href="$UPLOAD_URL">Try again,</a>
+or return to the
+<a href="$HOME_URL">home page</a>.
+</p>
+
+</div>
+END
+  DoPage({ 'Title' => 'Upload Failed', 'CSS' => <<END }, $html);
+DIV#content {
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+}
+END
+
+  exit;
+}
+
+sub UploadPage
+{
+  my $html = <<END;
+<div class="textwall">
+<h2>Share your documents.</h2>
+
+<p>Add a DOCMaker document below:</p>
+
+<form enctype="multipart/form-data" method="POST" action="$UPLOAD_URL" class="uploadform">
+<div class="ring">
+
+<input type="file" id="filebox" name="filebox">
+<input type="submit" name="submit" value="Upload">
+
+</div></form>
+
+<p><b>Is it in the right format?</b> To preserve the Mac-specific info that makes up a DOCMaker document, the file must be packed up in MacBinary, BinHex, or AppleSingle format. There are several classic Mac tools that can help you package up the document before you upload it. The file must NOT be compressed in StuffIt, Compact Pro, or other compression schemes.</p>
+
+<p style="padding-left: 24px; margin-bottom: 0"><b>Good formats:</b> my-doc.bin, my-doc.hqx</p>
+
+<p style="padding-left: 24px"><b>Bad formats:</b> my-doc.sit, my-doc.sit.bin, my-doc.bin.hqx</p>
+
+<p>
+See our <a href="$HELP_URL">help page</a> if you run into problems.
+</p>
+
+</div>
+END
+  DoPage({ 'Title' => 'DOCMaker Library: Share', 'CSS' => <<END }, $html);
+DIV#content {
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+}
+END
+
+  exit;
+}
+

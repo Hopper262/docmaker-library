@@ -1,0 +1,76 @@
+#!perl
+use strict;
+use warnings 'FATAL' => 'all';
+
+our ($FILE_URL);
+
+sub DocLinkMedium
+{
+  my ($id) = @_;
+  return '' unless $id;
+  
+  my ($disp, $name, $date, $pages) = DBObject()->select(<<END, $id);
+SELECT display_id, display_name, DATE_FORMAT(created, '%M %Y'), pages
+  FROM document
+ WHERE id = ?
+END
+  return '' unless $disp;
+
+  my $link = qq(<a href="$FILE_URL/$disp/">) . 
+             qq(<img src="$FILE_URL/$disp/icon.png" width="32" height="32" alt="Icon">) .
+             qq(<div>) . Format($name) . qq(</div>);
+
+  $link .= q(<span class="slotsub">) .
+           $pages . ' page' . ($pages == 1 ? '' : 's');
+  $link .= qq( &nbsp; &bull; &nbsp; $date) if $date;
+  $link .= qq(</span></a>\n);
+
+  return $link;
+}
+
+sub DocList
+{
+  my ($sortp, $limitp, $offp) = @_;
+  
+  my $html = qq(<ul class="uploads">\n);
+  
+  my %sort = (
+    'n' => 'display_name ASC, id ASC',
+    'd' => 'created ASC, id ASC',
+    'e' => 'created DESC, id DESC',
+    'u' => 'id DESC',
+    );
+  my $sortsql = $sort{$sortp} || $sort{'u'};
+  my $limsql = $limitp ? "LIMIT $limitp" : '';
+  my $offsql = $offp ? "OFFSET $offp" : '';
+
+  my ($docid);
+  my $st = DBObject()->bind(<<END, undef, \$docid);
+SELECT id
+  FROM document
+ WHERE inited
+   AND !private
+ ORDER BY $sortsql
+ $limsql $offsql
+END
+  while ($st->fetch())
+  {
+    $html .= '<li>' . DocLinkMedium($docid) . "</li>\n";
+  }
+  $html .= "</ul>\n";
+  return $html;
+}
+
+sub DocCount
+{
+  my $ct = DBObject()->select(<<END);
+SELECT COUNT(*)
+  FROM document
+ WHERE inited
+   AND !private
+END
+  return $ct;
+}
+
+# end file
+1;

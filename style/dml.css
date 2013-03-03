@@ -1,0 +1,232 @@
+H1, H2, H3, H4, H5, H6 { 
+  font-family: "Cabin", Geneva, sans-serif;
+  font-weight: 700;
+}
+
+HTML {
+  background-color: #ddd;
+  color: black;
+}
+DIV#head, DIV#foot {
+  background-image: -moz-linear-gradient(top, #FFFFFF 0%, #DDDDDD 100%);
+  background-image: -o-linear-gradient(top, #FFFFFF 0%, #DDDDDD 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0, #FFFFFF), color-stop(1, #DDDDDD));
+  background-image: -webkit-linear-gradient(top, #FFFFFF 0%, #DDDDDD 100%);
+  background-image: linear-gradient(to bottom, #FFFFFF 0%, #DDDDDD 100%);
+}
+
+BODY { 
+  background-color: #f8f8f8;
+/*
+  background-image: url(gridtest.png);
+*/
+  color: black;
+  font-family: Cabin, Geneva, sans-serif;
+  font-size: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+
+P.error { text-align: center; }
+
+DIV#head {
+  border-bottom: solid 1px #aaa;
+  height: 120px;
+  margin: 0 0 24px;
+  position: relative;
+}
+DIV#head IMG.logo {
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  left: 0;
+  top: 50%;
+  margin: -48px 0 0 0;
+  padding: 0;
+  border: none;
+}
+DIV#head H1 {
+  text-align: left;
+  font-size: 40px;
+  margin: 0 0 -.15em 111px;
+  padding: 24px 0 0;
+}
+DIV#head P.tagline {
+  font-size: 16px;
+  line-height: 18px;
+  color: #777;
+  margin: 0 0 0 111px;
+  padding: 0;
+}
+DIV#content {
+  margin: 0;
+  padding: 1px 30px 10px;
+}
+DIV#foot {
+  font-size: 12px;
+  color: #555;
+  padding: 10px 30px;
+  margin: 0;
+  border-top: solid 1px #aaa;
+}
+DIV#foot A:link, DIV#foot A:visited {
+  text-decoration: none;
+}
+DIV#foot A:hover {
+  text-decoration: underline;
+}
+DIV#headinner, DIV#footinner, DIV.contentlike {
+  position: relative;
+  max-width: 980px;
+  margin: 0 auto;
+}
+DIV.textwall {
+  max-width: 700px;
+}
+DIV.textwall P {
+  text-align: justify;
+}
+
+H2, H3, P { margin: 0; padding: 0; }
+
+P {
+  line-height: 24px;
+  margin-bottom: 24px;
+}
+H2 {
+  font-size: 36px;
+  line-height: 48px;
+  margin-bottom: 24px;
+}
+H3, H2.small {
+  font-size: 24px;
+  line-height: 24px;
+  margin-bottom: 24px;
+}
+H3 {
+  color: #633;
+}
+
+DIV#maincol {
+  float: left;
+  width: 512px;
+  padding-top: 1px;
+}
+DIV#maincol P {
+  text-align: justify;
+}
+
+DIV#uploadcol {
+  float: left;
+  padding: 1px 0 0 58px;
+  width: 340px;
+}
+
+LABEL {
+  font-size: 12px;
+}
+
+A:link {
+  color: #008;
+}
+A:visited {
+  color: #808;
+}
+
+FORM.uploadform {
+  display: block;
+  margin: 20px 40px;
+  padding: 0;
+  background-color: white;
+  border-radius: 8px;
+  border: solid 1px #aaa;
+  padding: 0;
+}
+FORM.uploadform DIV.ring {
+  padding: 10px 20px;
+  margin: 0;
+  background-color: white;
+  border-radius: 8px;
+  border: solid 2px #eee;
+  border-left-color: #88f;
+  border-bottom-color: #ddd;
+  border-right-color: #ddd;
+}
+FORM.uploadform INPUT {
+  font-family: "Cabin", Geneva, sans-serif;
+  font-size: 18px;
+}  
+
+UL.uploads {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+}
+UL.uploads LI {
+  float: left;
+  background-color: white;
+  border-radius: 8px;
+  border: solid 1px #aaa;
+  padding: 0;
+  margin: 6px 12px 6px 0;
+}
+UL.uploads LI A {
+  display: block;
+  width: 250px;
+  height: 34px;
+  padding: 10px 20px 10px 62px;
+  margin: 0;
+  background-color: white;
+  border-radius: 8px;
+  border: solid 2px #eee;
+  border-left-color: #88f;
+  border-bottom-color: #ddd;
+  border-right-color: #ddd;
+  text-decoration: none;
+  font-family: "Cabin", Geneva, sans-serif;
+  font-size: 16px;
+  color: #008;
+}
+UL.uploads A:visited {
+  border-left-color: #d3d;
+  color: #808;
+}
+UL.uploads A:hover {
+  background-image: -moz-linear-gradient(top, #ecc 0%, #ffe 100%);
+  background-image: -o-linear-gradient(top, #ecc 0%, #ffe 100%);
+  background-image: -webkit-gradient(linear, left top, left bottom, color-stop(0, #ecc), color-stop(1, #ffe));
+  background-image: -webkit-linear-gradient(top, #ecc 0%, #ffe 100%);
+  background-image: linear-gradient(to bottom, #ecc 0%, #ffe 100%);
+  background-color: #fed;
+  border-top-color: #ebb;
+  border-bottom-color: #eed;
+  border-right-color: #eed;
+}
+UL.uploads LI A IMG {
+  float: left;
+  width: 32px;
+  height: 32px;
+  margin-left: -42px;
+}
+
+SPAN.slotsub {
+  display: block;
+  font-size: 12px;
+  font-family: "Cabin", Geneva, sans-serif;
+  font-weight: normal;
+  color: #333;
+}
+
+SPAN#submit_wait {
+  font-size: 12px;
+}
+
+P.byline {
+  float: right;
+  text-align: right;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  color: white;
+}

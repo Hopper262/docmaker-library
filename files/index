@@ -1,0 +1,50 @@
+#!/usr/bin/perl
+use strict;
+use warnings 'FATAL' => 'all';
+require '../modules/docmaker.ph';
+
+our ($ARCHIVE_URL);
+
+my $cg = CGObject();
+my $sortp = $cg->param('s');
+$sortp = 'u' unless (defined $sortp && $sortp =~ /^[ndeu]$/);
+
+my %opts = ( 'Title' => 'DOCMaker Library: Archives' );
+
+my $html = <<END;
+<div class="contentlike">
+<h2 class="small">Browse our archives.</h2>
+
+<p>Sort the collection by: &nbsp;
+END
+$html .= ($sortp ne 'n') ? <<END1 : <<END2;
+<a href="$ARCHIVE_URL?s=n">Name (A-Z)</a>
+END1
+<b>Name (A-Z)</b>
+END2
+$html .= ' &nbsp;&bull;&nbsp; ';
+$html .= ($sortp ne 'd') ? <<END1 : <<END2;
+<a href="$ARCHIVE_URL?s=d">Date (earliest first)</a>
+END1
+<b>Date (earliest first)</b>
+END2
+$html .= ' &nbsp;&bull;&nbsp; ';
+$html .= ($sortp ne 'e') ? <<END1 : <<END2;
+<a href="$ARCHIVE_URL?s=e">Date (latest first)</a>
+END1
+<b>Date (latest first)</b>
+END2
+$html .= ' &nbsp;&bull;&nbsp; ';
+$html .= ($sortp ne 'u') ? <<END1 : <<END2;
+<a href="$ARCHIVE_URL?s=u">Uploaded (most recent first)</a>
+END1
+<b>Uploaded (most recent first)</b>
+END2
+
+$html .= <<END;
+</p>
+</div>
+END
+$html .= DocList($sortp);
+
+DoPage(\%opts, $html);

@@ -1,0 +1,308 @@
+#!perl
+use strict;
+use warnings 'FATAL' => 'all';
+use CGI ();
+use Carp ();
+use HTML::Entities ();
+
+our ($FILEROOT, $HOME_URL, $ARCHIVE_URL, $MAP_URL, $FULLROOT);
+require "$FILEROOT/modules/My/Mail.pm";
+
+sub my_die {
+  return if $^S;
+  PageError($_[0]);
+}
+$SIG{__DIE__} = \&my_die;
+
+
+our ($ROOT, $STYLE);
+our ($CG);
+
+our $DEVMODE = 1;
+
+sub CGObject
+{
+  $CG = CGI->new() unless $CG;
+  return $CG;
+}
+
+sub PageError
+{
+  my ($err, $sql) = @_;
+  my (@messages, $title, $body);
+  
+  push(@messages, 'Error message', $err);
+  push(@messages, 'SQL in use', $sql);
+  push(@messages, 'Stack trace', Carp::longmess("PageError"));
+  
+  if ($DEVMODE)
+  {
+    $body .= '<dl class="error">';
+    while (@messages)
+    {
+      my $key = shift @messages;
+      my $val = shift @messages;
+      next unless $key && $val;
+      $val = HTML::Entities::encode($val);
+      $val =~ s/^(\s+)/'&nbsp;' x length($1)/gem;
+      $val =~ s/\n/<br \/>/sg;
+      $body .= <<END;
+<dt>$key:</dt>
+<dd>$val</dd>
+END
+    }
+    $body .= '</dl>';
+  }
+  else
+  {
+    my $msg = '';
+    while (@messages)
+    {
+      my $key = shift @messages;
+      my $val = shift @messages;
+      next unless $key && $val;
+      $msg .= "$key:\n$val\n\n";
+    }
+    
+    My::Mail::mail('from' => 'errors@whpress.com',
+                   'subject' => 'Pathways error',
+                   'to' => 'hopper@whpress.com',
+                   'msg' => $msg);
+  }
+    
+  
+  UserError('Seven men in overcoats jump from the shadows and carry you away.  You are never heard from again.', $body);
+} # end PageError
+
+sub UserError
+{
+  my ($msg, $extended) = @_;
+  $msg = 'Something went terribly awry.' unless $msg;
+  $msg = HTML::Entities::encode($msg);
+  $extended = '' unless $extended;
+  
+  my %opts = (
+    'Title' => 'Server Error',
+    'PreHead' => '<p class="tagline">Errors. They&rsquo;re everywhere. Can&rsquo;t stand &rsquo;em.</p>',
+    );
+  DoPage(\%opts, <<END);
+<p>
+$msg
+</p>
+
+$extended
+END
+  exit;
+}
+
+sub URI {
+  my ($scr, @args) = @_;
+  
+  my $url = $scr;
+  unless ($scr =~ /^\w+\:/)
+  {
+    $scr = "$ROOT/$scr" unless $scr =~ m|^/|;
+    $url = 'http://' . $ENV{'HTTP_HOST'} . $scr;
+  }
+  if (scalar @args)
+  {
+    $url .= '?' . join('&amp;', @args);
+  }
+  return $url;
+} # end URI
+
+sub Header {
+  my (@lines) = @_;
+  
+  if (scalar @lines == 1)
+  {
+    @lines = split(/\n/, $lines[0]);
+  }
+  push(@lines, 'Content-Type: text/html; charset=utf-8');
+  
+  return join("\015\012", @lines) . "\015\012\015\012";
+} # end Header
+
+sub Redirect {
+  print Header('Status: 302 Found', 'Location: ' . URI(@_));
+  exit;
+}
+sub NotFound {
+  print Header('Status: 404 Not Found') .
+        PageHeader({ 'Title' => '404 Not Found' }) .
+        <<END . PageFooter();
+<p>
+If it used to be here, it's not here now. I think Muller took it.
+</p>
+
+<p>
+<a href="$HOME_URL">Return to the home page</a>
+</p>
+END
+  exit;
+}
+
+sub DoPage
+{
+  my ($opts, $body) = @_;
+  
+  print Header() .
+        PageHeader($opts) .
+        ($body || '<p>Hmm...</p>') .
+        PageFooter($opts);
+  exit;
+} # end DoPage
+
+sub PageHeader
+{
+  my ($opts) = @_;
+ 
+  my $any = sub { my $r = $_[0]; return (ref $r ? @$r : $r); };
+  
+  my $pgtitle = $opts->{'Head'} || $opts->{'Title'} || 'The Brown Crystal';
+  
+  my $html = <<END;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+                      "http://www.w3.org/TR/html4/strict.dtd">
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+END
+  for my $css_url (
+    'http://fonts.googleapis.com/css?family=Cabin:700,400',
+    "$STYLE/dml.css",
+    $any->($opts->{'CSS_Url'}) )
+  {
+    $html .= <<END if $css_url;
+<link rel="stylesheet" type="text/css" href="$css_url">
+END
+  }
+  for my $css_url (
+    $any->($opts->{'CSS_Screen_Url'}) )
+  {
+    $html .= <<END if $css_url;
+<link rel="stylesheet" type="text/css" media="screen" href="$css_url">
+END
+  }
+  for my $css_url (
+    $any->($opts->{'CSS_Print_Url'}) )
+  {
+    $html .= <<END if $css_url;
+<link rel="stylesheet" type="text/css" media="print" href="$css_url">
+END
+  }
+  for my $css (
+    $any->($opts->{'CSS'}) )
+  {
+    $html .= <<END if $css;
+<style type="text/css">
+$css
+</style>
+END
+  }
+  for my $js_url (
+    $any->($opts->{'JS_Url'}) )
+  {
+    $html .= <<END if $js_url;
+<script type="text/javascript" src="$js_url"></script>
+END
+  }
+  for my $js (
+    $any->($opts->{'JS'}) )
+  {
+    $html .= <<END if $js;
+<script type="text/javascript">
+$js
+</script>
+END
+  }
+  for my $extra (
+    "<title>$pgtitle</title>\n",
+    $any->($opts->{'HeadExtra'}) )
+  {
+    $html .= $extra if $extra;
+  }
+  $html .= <<END;
+</head>
+<body>
+<div id="head"><div id="headinner">
+<a href="$HOME_URL"><img class="logo" src="$STYLE/dml.png" alt="Logo"></a>
+<h1>DOCMaker Library</h1>
+<p class="tagline">Stand-alone documents on the Mac.<br>Now together on the Web.</p>
+</div></div><div id="content">
+END
+  return $html;
+}
+sub PageFooter
+{
+  return <<END;
+<div style="clear: both"></div>
+</div>
+<div id="foot"><div id="footinner">
+<div>All uploaded documents are copyright their respective creators.</div>
+<div><a href="http://systemfolder.wordpress.com/2010/03/25/mac-classics-docmaker/">DOCMaker</a> was created by Mark S. Wall, Green Mountain Software.</div>
+<div>DOCMaker Library was created by Jeremiah Morris.</div>
+</div></div>
+
+</div>
+</body>
+</html>
+END
+}
+
+sub Fmt
+{
+  my ($str) = @_;
+  $str = HTML::Entities::encode($str || '');
+  return $str;
+}
+
+sub Format
+{
+  my ($str) = @_;
+  $str = Fmt($str);
+  $str =~ s/\x0d/<br>/g;
+  return $str;
+}
+
+
+sub GenPageStart
+{
+  my ($title, $class) = @_;
+  $title = 'Untitled' unless length $title;
+  $class = 'default' unless $class;
+  
+  my @dateparts = localtime();
+  my $datestr = sprintf("%04d-%02d-%02d", $dateparts[5] + 1900, $dateparts[4] + 1, $dateparts[3]);
+  
+  my $html .= <<END;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+                      "http://www.w3.org/TR/html4/strict.dtd">
+<html lang="en" class="$class">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="generator" content="DOCMaker Library (http://docmaker.whpress.com/)">
+<meta name="date" content="$datestr">
+<link rel="stylesheet" type="text/css" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8/themes/base/jquery-ui.css">
+<link rel="stylesheet" type="text/css" href="page.css">
+<link rel="stylesheet" type="text/css" href="$FULLROOT/resources/nav.css">
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.21/jquery-ui.min.js"></script>
+<script type="text/javascript" src="page.js"></script>
+<script type="text/javascript" src="$FULLROOT/resources/nav.js"></script>
+<title>@{[ Fmt($title) ]}</title>
+</head>
+<body class="$class">
+END
+  return $html;
+}
+
+sub GenPageEnd
+{
+  return <<END;
+</body></html>
+END
+}
+
+# end file
+1;

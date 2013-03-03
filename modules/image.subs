@@ -1,0 +1,79 @@
+#!/usr/bin/perl
+use strict;
+use warnings 'FATAL' => 'all';
+use Image::Magick ();
+use Sys::Hostname ();
+
+our ($FILEROOT);
+
+sub IconToImage
+{
+  my ($icn, $icl8, $outpath) = @_;
+  return 0 unless (defined($icn) && length($icn) == 256);
+  return 0 unless $outpath;
+  
+  my $img = Image::Magick->new();
+  $img->Set('size' => '32x32');
+  $img->Read('canvas:rgb(0,0,0,0)');
+  $img->Set('matte' => 'True');
+  $img->Set('alpha' => 'On');
+  
+  
+  my @alpha_data = map { $_ ? 0.0 : 1.0 } split(//, unpack("B*", substr($icn, 128, 128)));
+  my ($ctab, @color_data);
+  if ($icl8)
+  {
+    $ctab = IconColorTable(8);
+    @color_data = unpack("C*", $icl8);
+  }
+  else
+  {
+    $ctab = IconColorTable(1);
+    @color_data = map { $_ + 0 } split(//, unpack("B*", substr($icn, 0, 128)));
+  }
+  
+  for my $y (0..31)
+  {
+    for my $x (0..31)
+    {
+      my @clr = @{ $ctab->[shift @color_data] };
+      push(@clr, shift @alpha_data);
+      $img->SetPixel('x' => $x, 'y' => $y, 'channel' => 'All', 'color' => \@clr);
+    }
+  }
+  
+  $img->Write($outpath);
+  return 1;
+}
+    
+sub PictToImage
+{
+  my ($pict, $outpath) = @_;
+  return 0 unless defined($pict);
+  return 0 unless $outpath;
+  
+  my $tmpname = "$outpath.pict";
+  my $tmp_fh;
+  open($tmp_fh, '>', $tmpname) or die "Could not write to $tmpname: $!";
+  print $tmp_fh chr(0) x 512;
+  print $tmp_fh $pict;
+  close $tmp_fh;
+  
+  # PICT parsing can't be left to the professionals.
+  my $ppmconv = "$FILEROOT/modules/byHost/" . Sys::Hostname::hostname() . "/picttoppm";
+  system(qq("$ppmconv" -background '#f8f7ec' "$tmpname" | convert ppm:- -transparent '#f8f7ec' "$outpath"));  
+  unlink $tmpname;
+}
+
+sub ImageSize
+{
+  my ($imgpath) = @_;
+  
+  my $img = Image::Magick->new();
+  return (0, 0) unless $img;
+  $img->Read($imgpath);
+  return ($img->Get('width'), $img->Get('height'));
+}
+
+
+1;

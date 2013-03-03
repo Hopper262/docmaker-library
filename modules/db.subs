@@ -1,0 +1,34 @@
+#!perl
+use strict;
+use warnings 'FATAL' => 'all';
+use Storable ();
+
+our ($FILEROOT);
+require "$FILEROOT/modules/My/DB.pm";
+
+our ($DB_RO, $DB_RW, %DB_INFO);
+
+sub DBObject
+{
+  my ($which) = @_;
+  return DBObjectRW() if (defined($which) && ($which eq 'rw'));
+  
+  $DB_RO = My::DB->new(
+    $DB_INFO{'pathways'}{'DB_Name'} . '@' . $DB_INFO{'pathways'}{'Host'},
+    $DB_INFO{'pathways'}{'ro'}{'User'},
+    $DB_INFO{'pathways'}{'ro'}{'Password'},
+    \&PageError) unless $DB_RO;
+  return $DB_RO;
+}
+sub DBObjectRW
+{
+  $DB_RW = My::DB->new(
+    $DB_INFO{'pathways'}{'DB_Name'} . '@' . $DB_INFO{'pathways'}{'Host'},
+    $DB_INFO{'pathways'}{'rw'}{'User'},
+    $DB_INFO{'pathways'}{'rw'}{'Password'},
+    \&PageError) unless $DB_RW;
+  return $DB_RW;
+}
+
+# end file
+1;

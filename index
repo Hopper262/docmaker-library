@@ -1,0 +1,67 @@
+#!/usr/bin/perl
+use strict;
+use warnings 'FATAL' => 'all';
+require 'modules/docmaker.ph';
+
+our ($UPLOAD_URL, $ARCHIVE_URL, $HELP_URL);
+
+
+my %opts = ( 'Title' => 'DOCMaker Library', 'CSS' => <<END );
+DIV#content {
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+}
+END
+
+my $html = '';
+
+## Left-hand section
+$html .= <<END;
+<div id="maincol">
+
+<h2>Your content started on a classic Mac, but don’t let it end there.</h2>
+
+<p>Remember the days when Fetch was the most important Internet application, before every Mac came with a web browser and PDF viewer? SimpleText was fine, if you didn't need pictures or more than a few thousand words. But for dynamic, multi-page documents that anyone with a Mac could read, DOCMaker was far and away the best solution. <span style="font-size: 12px; line-height: 24px">(Not ringing any bells? <a href="http://systemfolder.wordpress.com/2010/03/25/mac-classics-docmaker/">Learn more about DOCMaker.</a>)</span></p>
+
+<p>Times have changed, though, and flipping through those old e-zines now means you have to pull a “pizza box” Mac out of mothballs, or work out how to get an emulator running properly. And you still can't share it with anybody else.</p>
+
+<h3>Straight to the web in under five minutes.</h3>
+
+<p>DOCMaker Library doesn’t convert everything perfectly; there’s still no substitute for an actual Mac. But it beats the pants off letting your early magnum opus rot away on a Zip Disk. Or maybe it doesn’t; you probably cranked out some pretty embarrassing stuff back then. Still, waving your freak flag is what makes the Internet great. So slap it on the web and call it a day.</p>
+
+<h3>Best of all, it’s free.</h3>
+
+<p>What have you got to lose? <span style="font-size: 12px; line-height: 24px">(Your dignity?)</span> Wait, don’t answer that. Look, if you’re really unhappy, blame it all on <a href="$HELP_URL">conversion issues</a>. That drawing of you beating Vanilla Ice in a Pok&eacute;mon battle probably won’t show up properly anyway. If it does, <a href="mailto:hopper\@whpress.com?subject=DOCMaker%20Library">email me</a> and I’ll have a good laugh.</p>
+</div>
+END
+
+## Upload section
+
+$html .= <<END;
+<div id="uploadcol" style="padding-top: 1px">
+<h2 class="small" style="margin-top: 15px"><a href="$UPLOAD_URL">Add to our library.</a></h3>
+<h2 class="small">Or, read our newest additions.</h2>
+@{[ DocList('u', 8) ]}
+END
+
+my $ct = DocCount();
+my $rough_ct = $ct - 1;
+$rough_ct = $ct - ($ct % 10) if $ct > 50;
+$rough_ct = $ct - ($ct % 50) if $ct > 200;
+$rough_ct = $ct - ($ct % 100) if $ct > 500;
+$rough_ct = $ct - ($ct % 500) if $ct > 2000;
+
+$html .= <<END;
+<p style="clear: left; padding-top: 12px">Find over $rough_ct documents in our <a href="$ARCHIVE_URL">archives</a>.</p>
+</div>
+
+<h3 style="text-align: center; width: 512px; clear: both"><a href="$UPLOAD_URL">Start sharing today!</a></h3>
+END
+
+## done
+# $html .= <<END;
+# <div style="clear: both"></div>
+# END
+
+DoPage(\%opts, $html);

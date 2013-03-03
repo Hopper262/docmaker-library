@@ -1,0 +1,66 @@
+#!/usr/bin/perl
+use strict;
+use warnings 'FATAL' => 'all';
+require 'modules/docmaker.ph';
+
+our ($ARCHIVE_URL);
+
+my $cg = CGObject();
+my $sortp = $cg->param('s');
+$sortp = 'u' unless (defined $sortp && $sortp =~ /^[ndeu]$/);
+
+my %opts = ( 'Title' => 'DOCMaker Library: Help', 'CSS' => <<END );
+DIV#content {
+  max-width: 980px;
+  margin-left: auto;
+  margin-right: auto;
+}
+END
+
+my $emailme = '<a href="mailto:hopper@whpress.com?subject=DOCMaker%20Library">email me</a>';
+
+my $html = <<END;
+<div class="textwall">
+<h2>Why’s this thing so crappy?</h2>
+
+<p>Okay, I know you’re disappointed. But DOCMaker documents were designed to be displayed on a ’90s-era Mac, and that environment doesn’t translate well to the Web. There’s a lot that can be lost in the translation.</p>
+
+<h3>Why doesn’t it like my upload?</h3>
+
+<p><b>Is it in the right format?</b> To preserve the Mac-specific info that makes up a DOCMaker document, the file must be packed up in MacBinary, BinHex, or AppleSingle format. There are several classic Mac tools that can help you package up the document before you upload it. The file must NOT be compressed in StuffIt, Compact Pro, or other compression schemes.</p>
+
+<p style="padding-left: 24px; margin-bottom: 0"><b>Good formats:</b> my-doc.bin, my-doc.hqx</p>
+
+<p style="padding-left: 24px"><b>Bad formats:</b> my-doc.sit, my-doc.sit.bin, my-doc.bin.hqx</p>
+
+<p><b>Was it customized or corrupted?</b> If the file doesn’t have the standard DOCMaker signature (type and creator codes), the converter gets all confused and pouty. If that’s the problem, the error message will mention it. Check it in ResEdit if you’re not sure.</p>
+
+<p><b>Is it an old version?</b> I only found DOCMaker 4.x files to test with. Earlier versions may have done things differently, and confused the converter. You can $emailme the file and I’ll see if I can get things sorted out.</p>
+
+<h3>Why is the text wrong?</h3>
+
+<p>It’s probably because of fonts. Many of the standard Mac fonts of yore are not installed on current computers. Even if you do have the right font, chances are it’s being anti-aliased, and the size and spacing of characters doesn’t quite match how it looked on an actual classic Mac.</p>
+
+<p>The original DOCMaker would warn you if you didn’t have the right fonts installed. DOCMaker Library isn’t that smart. If you’d like to fix up a document yourself, you can download the complete HTML and CSS from the “About” link in the navigation toolbar.</p>
+
+<h3>Why are the pictures wrong?</h3>
+
+<p>Like almost every Mac application, DOCMaker stored its images in PICT format. Unfortunately, this format is (1) very complicated, and (2) not officially documented anywhere. This makes life very difficult for anyone trying to convert PICTs to something more standard. DOCMaker Library does a better job of anything I’ve seen outside of Cupertino &mdash; I modified <a href=”http://netpbm.sourceforge.net/”>netpbm</a> quite a bit to get it this close &mdash; but it still fails miserably on a regular basis.</p>
+
+<p>If the picture is slightly blurry, that's because it's been magnified slightly. Classic Macs had fewer pixels per inch than modern computers; this means fonts that looked fine back then are tiny now. To keep text readable, the HTML conversion scales up the fonts, and also the images to stay in proportion. The magnification is just done by your browser; if you save the image, you'll see it in its original pixel-for-pixel glory.</p>
+
+<h3>Great. So what other options do I have?</h3>
+
+<p>Your best bet is to run the original document on an old Mac, or an emulator like <a href="http://www.emaculation.com/forum/viewforum.php?f=20">SheepShaver</a>. Emulators are a bit of work to set up, but if you look around you can find some good tutorials and pre-built disk images. Sorry, but I can’t help you with emulator problems.</p>
+
+<p>You can download the original DOCMaker file for any document on this site, even if you didn’t upload it yourself. Just click the “About” link in the navigation toolbar, and look for the “DOCMaker” link at the bottom of the dialog.</p>
+
+<p>To get content out of the emulator and into a different format, try taking screenshots. You can also print the document to a file using LaserWriter 8, or Adobe’s PDF Writer, but some DOCMaker documents won’t look right when printed. Sorry, that’s just how it goes.</p>
+
+<h3>I’m a developer. Can I try to fix it myself?</h3>
+
+<p>Yes! You can grab the <a href="DML-source.zip">complete Perl source code</a> and hack away. Feel free to $emailme if you have any questions.</p>
+</div>
+END
+
+DoPage(\%opts, $html);

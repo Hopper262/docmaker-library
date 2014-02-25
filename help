@@ -45,7 +45,7 @@ my $html = <<END;
 
 <h3>Why are the pictures wrong?</h3>
 
-<p>Like almost every Mac application, DOCMaker stored its images in PICT format. Unfortunately, this format is (1) very complicated, and (2) not officially documented anywhere. This makes life very difficult for anyone trying to convert PICTs to something more standard. DOCMaker Library does a better job of anything I’ve seen outside of Cupertino &mdash; I modified <a href=”http://netpbm.sourceforge.net/”>netpbm</a> quite a bit to get it this close &mdash; but it still fails miserably on a regular basis.</p>
+<p>Like almost every Mac application, DOCMaker stored its images in PICT format. Unfortunately, this format is (1) very complicated, and (2) not officially documented anywhere. This makes life very difficult for anyone trying to convert PICTs to something more standard. DOCMaker Library does a better job than anything I’ve seen outside of Cupertino &mdash; I modified <a href="http://netpbm.sourceforge.net/">netpbm</a> quite a bit to get it this close &mdash; but it still fails miserably on a regular basis.</p>
 
 <p>If the picture is slightly blurry, that's because it's been magnified slightly. Classic Macs had fewer pixels per inch than modern computers; this means fonts that looked fine back then are tiny now. To keep text readable, the HTML conversion scales up the fonts, and also the images to stay in proportion. The magnification is just done by your browser; if you save the image, you'll see it in its original pixel-for-pixel glory.</p>
 

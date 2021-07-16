@@ -1,9 +1,11 @@
 #!/usr/bin/perl
 use strict;
 use warnings 'FATAL' => 'all';
-require 'modules/io.subs';
 use Encode ();
 use Carp ();
+
+our ($FILEROOT);
+require "$FILEROOT/modules/io.subs";
 
 sub RForkToHash
 {

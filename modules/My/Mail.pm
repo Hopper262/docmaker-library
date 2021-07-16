@@ -25,8 +25,8 @@ My::Mail - send email
 
 =head1 DESCRIPTION
 
-My::Mail provides a simple interface to email functions. It's a thin
-wrapper around Mail::Sender, automatically setting some common options
+My::Mail provides a simple interface to email functions.
+It automatically sets some common options
 that won't change, like encoding type or SMTP gateway.
 
 You can use the mailer in either an object-oriented mode, where it remembers
@@ -35,17 +35,19 @@ to send more emails), or in a one-shot mode that needs no object.
 
 =head1 PREREQUISITES
 
-My::Mail uses the Mail::Sender module to do the real work.
+My::Mail uses the Email::Sender and Email::MIME modules to do the real work.
 
 =cut
 
 BEGIN {
   use Exporter ();
-  use Mail::Sender ();
+  use Email::Sender::Simple ();
+  use Email::Sender::Transport::SMTP ();
+  use Email::MIME ();
     
   our ($VERSION, @ISA, @EXPORT, @EXPORT_OK, %EXPORT_TAGS);
   
-  $VERSION = '1.02';
+  $VERSION = '1.10';
     
   @ISA = qw(Exporter);
   @EXPORT = qw();
@@ -150,67 +152,58 @@ sub mail
     }
   }
   
-  my $sender = Mail::Sender->new({ _defaults() });
-  unless ($sender)
+  my @parts;
+  if ($opts{'msg'})
   {
-    print STDERR "Mail::Sender->new failed: $Mail::Sender::Error";
+    push(@parts, Email::MIME->create(
+                    'attributes' => {
+                      'content_type' => 'text/plain',
+                      'disposition' => 'inline',
+                      'encoding' => $opts{'encoding'},
+                    },
+                    'body_text' => $opts{'msg'}));
+  }
+  if ($opts{'html'})
+  {
+    push(@parts, Email::MIME->create(
+                    'attributes' => {
+                      'content_type' => 'text/html',
+                      'disposition' => 'inline',
+                      'encoding' => $opts{'encoding'},
+                    },
+                    'body_text' => $opts{'html'}));
+  }
+  
+  my $email = Email::MIME->create(
+                'header_str' => [
+                  'From' => $opts{'fake_from'} || $opts{'from'},
+                  'To' => $opts{'fake_to'} || $opts{'to'},
+                  'Cc' => $opts{'cc'},
+                  'Bcc' => $opts{'bcc'},
+                ],
+                'parts' => [ @parts ]);
+  
+  eval {
+    Email::Sender::Simple::sendmail($email,
+      {
+        'from' => $opts{'from'},
+        'to' => $opts{'to'},
+      });
+  };
+  if ($@) {
+    print STDERR "Email::Sender::Simple::sendmail failed: $@";
     return undef;
   }
-  
-  if ($opts{'html'} && $opts{'msg'})
-  {
-    # multipart
-    my $textpart = $opts{'msg'};
-    delete $opts{'msg'};
-    my $htmlpart = $opts{'html'};
-    delete $opts{'html'};
-    my $enc = $opts{'encoding'};
-    delete $opts{'encoding'};
-    
-    $opts{'multipart'} = 'alternative';
-    my $ret = $sender->OpenMultipart(\%opts)
-        ->Part({ 'ctype' => 'text/plain',
-                 'disposition' => 'inline',
-                 'encoding' => $enc,
-                 'msg' => $textpart })
-        ->Part({ 'ctype' => 'text/html',
-                 'disposition' => 'inline',
-                 'encoding' => $enc,
-                 'msg' => $htmlpart })
-        ->Close();
-    if ($ret < 0)
-    {
-      print STDERR "Mail::Sender->Multipart failed: $Mail::Sender::Error";
-      return undef;
-    }
-  }
-  else
-  {
-    if ($opts{'html'})
-    {
-      $opts{'msg'} = $opts{'html'};
-      delete $opts{'html'};
-      $opts{'ctype'} = 'text/html';
-    }
-    
-    my $ret = $sender->MailMsg(\%opts);
-    if ($ret < 0)
-    {
-      print STDERR "Mail::Sender->MailMsg failed: $Mail::Sender::Error";
-      return undef;
-    }
-  }
-  
   return 1;
-} # end send
-
+} # end mail
+  
 
 sub _defaults
 {
-  return ('smtp' => 'localhost',
+  return ('transport' => Email::Sender::Transport::SMTP->new({}),
           'from' => 'jm@whpress.com',
           'to' => 'jm@whpress.com',
-          'encoding' => 'Quoted-printable');
+          'encoding' => 'quoted-printable');
 } # end _defaults
 
 =back
@@ -218,6 +211,10 @@ sub _defaults
 =head1 VERSION HISTORY
 
 =over 4
+
+=item Version 1.10 - 30 April 2018
+
+Rewrite to use Email::Sender instead of Mail::Sender.
 
 =item Version 1.02 - 9 May 2011
 
@@ -239,9 +236,8 @@ Jeremiah Morris, jm@whpress.com
 
 =head1 COPYRIGHT
 
-Copyright 2004-2011 Jeremiah Morris.  All rights reserved.
+Copyright 2004-2018 Jeremiah Morris.  All rights reserved.
 
 =cut
 
 1;
-

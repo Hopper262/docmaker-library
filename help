@@ -59,7 +59,7 @@ my $html = <<END;
 
 <h3>I’m a developer. Can I try to fix it myself?</h3>
 
-<p>Yes! You can grab the <a href="DML-source.zip">complete Perl source code</a> and hack away. Feel free to $emailme if you have any questions.</p>
+<p>Yes! You can fork or grab the <a href="https://github.com/Hopper262/docmaker-library">complete Perl source code</a> and hack away. Feel free to open an <a href="https://github.com/Hopper262/docmaker-library/issues/new">issue on GitHub</a> or $emailme if you have any questions.</p>
 </div>
 END
 

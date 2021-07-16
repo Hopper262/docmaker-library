@@ -241,7 +241,7 @@ sub PageFooter
 <div id="foot"><div id="footinner">
 <div>All uploaded documents are copyright their respective creators.</div>
 <div><a href="http://systemfolder.wordpress.com/2010/03/25/mac-classics-docmaker/">DOCMaker</a> was created by Mark S. Wall, Green Mountain Software.</div>
-<div>DOCMaker Library was created by Jeremiah Morris.</div>
+<div><a href="https://github.com/Hopper262/docmaker-library/">DOCMaker Library</a> was created by Jeremiah Morris.</div>
 </div></div>
 
 </div>
